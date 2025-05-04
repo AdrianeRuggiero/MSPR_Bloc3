@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent))  # pour accéder à la racine
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
 import numpy as np
@@ -22,10 +22,9 @@ DATA_PATH = "data/Fusion_with_stand.csv"
 MODEL_PATH = "models/saved_models/best_model_knn.pkl"
 os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
-# === Chargement
+# === Chargement des données
 df = pd.read_csv(DATA_PATH)
 
-# Encodage cible
 if df["Orientation gagnant"].dtype == object:
     le = LabelEncoder()
     df["Orientation gagnant"] = le.fit_transform(df["Orientation gagnant"])
@@ -50,17 +49,18 @@ X_rhone_scaled = scaler.transform(X_rhone)
 # === Split
 X_train, X_val, y_train, y_val = train_test_split(X_rest_scaled, y_rest, test_size=0.2, random_state=42)
 
-# === Entraînement
+# === Entraînement sur plusieurs valeurs de k
 best_accuracy = 0
 best_model = None
 accuracies = []
+k_values = range(3, 13)
 
-for epoch in range(1, 11):
-    model = KNeighborsClassifier(n_neighbors=5)
+for k in k_values:
+    model = KNeighborsClassifier(n_neighbors=k)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_val)
     acc = (y_pred == y_val).mean()
-    print(f"Époque {epoch}/10 - Accuracy : {acc:.4f}")
+    print(f"k = {k} → Accuracy : {acc:.4f}")
     accuracies.append(acc)
     if acc > best_accuracy:
         best_accuracy = acc
@@ -73,9 +73,9 @@ print(f" Modèle KNN sauvegardé dans {MODEL_PATH}")
 
 # === Graphe accuracy
 plt.figure()
-plt.plot(range(1, 11), accuracies, marker='o')
+plt.plot(k_values, accuracies, marker='o')
 plt.title("Évolution de l'Accuracy - KNN")
-plt.xlabel("Époque")
+plt.xlabel("k (nombre de voisins)")
 plt.ylabel("Accuracy")
 plt.grid(True)
 plt.tight_layout()
