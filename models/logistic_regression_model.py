@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).resolve().parent.parent))  # pour accès à correlation_report.py
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd
 import numpy as np
@@ -22,10 +22,10 @@ DATA_PATH = "data/Fusion_with_stand.csv"
 MODEL_PATH = "models/saved_models/best_model_logistic.pkl"
 os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 
-# === Chargement des données
+# === Chargement
 df = pd.read_csv(DATA_PATH)
 
-# Encodage de la cible
+# Encodage cible
 if df["Orientation gagnant"].dtype == object:
     le = LabelEncoder()
     df["Orientation gagnant"] = le.fit_transform(df["Orientation gagnant"])
@@ -35,53 +35,55 @@ else:
 X = df[variables_utiles]
 y = df["Orientation gagnant"]
 
-# === Séparation Rhône
+# Séparation Rhône
 df["Code commune"] = df["Code commune"].astype(str)
 is_rhone = df["Code commune"].str.startswith("69")
 X_rhone = X[is_rhone]
 X_rest = X[~is_rhone]
 y_rest = y[~is_rhone]
 
-# === Standardisation
+# Standardisation
 scaler = StandardScaler()
 X_rest_scaled = scaler.fit_transform(X_rest)
 X_rhone_scaled = scaler.transform(X_rhone)
 
-# === Split
+# Split
 X_train, X_val, y_train, y_val = train_test_split(X_rest_scaled, y_rest, test_size=0.2, random_state=42)
 
-# === Entraînement
+# === Entraînement avec variation de C
 best_accuracy = 0
 best_model = None
 accuracies = []
+C_values = np.logspace(-2, 1, 10)
 
-for epoch in range(1, 11):
-    model = LogisticRegression(max_iter=200, class_weight="balanced", random_state=42 + epoch)
+for i, C in enumerate(C_values, 1):
+    model = LogisticRegression(C=C, max_iter=300, class_weight='balanced', random_state=42)
     model.fit(X_train, y_train)
     y_pred = model.predict(X_val)
     acc = (y_pred == y_val).mean()
-    print(f"Époque {epoch}/10 - Accuracy : {acc:.4f}")
+    print(f"Époque {i}/10 - C={C:.3f} - Accuracy : {acc:.4f}")
     accuracies.append(acc)
     if acc > best_accuracy:
         best_accuracy = acc
         best_model = model
 
-# === Sauvegarde
+# Sauvegarde
 with open(MODEL_PATH, "wb") as f:
     pickle.dump(best_model, f)
 print(f" Modèle Logistic Regression sauvegardé dans {MODEL_PATH}")
 
-# === Graphe accuracy
+# Graphe accuracy
 plt.figure()
-plt.plot(range(1, 11), accuracies, marker='o')
+plt.plot(C_values, accuracies, marker='o')
+plt.xscale('log')
 plt.title("Évolution de l'Accuracy - Logistic Regression")
-plt.xlabel("Époque")
+plt.xlabel("Paramètre C (log)")
 plt.ylabel("Accuracy")
 plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# === Matrice de confusion
+# Matrice de confusion
 y_val_pred = best_model.predict(X_val)
 cm = confusion_matrix(y_val, y_val_pred)
 plt.figure(figsize=(8, 6))
@@ -93,7 +95,7 @@ plt.show()
 print("\nRapport de classification :")
 print(classification_report(y_val, y_val_pred, target_names=le.classes_))
 
-# === Prédiction Rhône + camembert
+# Prédiction Rhône + camembert
 rhone_preds = best_model.predict(X_rhone_scaled)
 rhone_labels = le.inverse_transform(rhone_preds)
 df_rhone = df[is_rhone].copy()
